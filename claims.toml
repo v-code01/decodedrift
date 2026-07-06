@@ -1,0 +1,45 @@
+# Every claim decodedrift makes, each tied to the artifact that proves it.
+# Verify integrity with ./scripts/gate.sh; reproduce with ./reproduce.sh.
+
+[project]
+name = "decodedrift"
+summary = "Per-token decode latency drifts upward linearly over a long generation, because each token attends to a KV cache that grows by one entry per step. The 1.5B drifts +17% and the 0.5B +14% over ~6000 tokens; the bigger model drifts faster in both absolute and relative terms, since its KV cache is deeper and wider. This is the decode-time complement to the quadratic prefill attention wall."
+language = "Python 3"
+license = "MIT"
+oracles = "per-token inter-token latency is a client-side monotonic-raw-clock timestamp on each streamed token. The gap is fit to gap = a + c*pos by closed-form OLS on binned medians; verify.py refits independently with numpy polyfit. No LLM judge."
+
+[[claim]]
+id = "pre-registered-prediction"
+statement = "Three predictions - decode latency drifts up linearly (slope positive, CI excludes zero); the drift is material; the bigger model drifts faster in absolute terms - were committed to git in PREREG.md before the sweep, and all three held. PREREG.md is not edited after the results."
+evidence = "PREREG.md (committed before results); README; bench_results/frontier.md."
+status = "verified"
+
+[[claim]]
+id = "decode-latency-drifts-linearly"
+statement = "For both models the per-token latency rises linearly with position with a positive slope whose bootstrap CI excludes zero: 1.5B c=1.74e-4 ms/token [CI 1.72e-4, 1.77e-4], 0.5B c=8.46e-5 [8.27e-5, 8.76e-5]. The 6000th token takes 17.1% (1.5B) / 13.8% (0.5B) longer than the first."
+evidence = "bench_results/frontier.md position table and slope CIs; tools/verify.py asserts the slope is positive with CI-low>0 and the relative drift exceeds 3% for both models."
+status = "verified"
+
+[[claim]]
+id = "bigger-model-drifts-faster"
+statement = "The 1.5B slope (1.74e-4 ms/token) is about twice the 0.5B slope (8.46e-5) and its relative drift is larger (17.1% vs 13.8%), because the KV cache scales with model depth and width - more per-position state to read each step. A larger model pays a steeper long-generation penalty, not only a higher baseline."
+evidence = "bench_results/frontier.md cross-model section; tools/verify.py asserts the 1.5B absolute slope exceeds the 0.5B."
+status = "verified"
+
+[[claim]]
+id = "intercept-is-the-position-independent-floor"
+statement = "The fitted intercept (6.11 ms for the 1.5B, 3.67 ms for the 0.5B) is the position-independent per-token cost - weight streaming and feed-forward - matching the memory-bound decode floor; the slope is the KV-growth cost added on top of it."
+evidence = "bench_results/frontier.md intercept lines; the intercept agreeing with a single-token decode rate."
+status = "verified"
+
+[[claim]]
+id = "no-overclaim"
+statement = "One backend (llama.cpp on Apple GPU, flash attention on), one build, Q4_K_M, two sizes, ~6000 tokens, temperature 0.7. Flash attention changes the constant, not the linear-in-context per-token read scaling. Gaps are single-stream client timestamps with the prefill-adjacent gaps dropped and 250-token-window medians. The adversarial review is in REVIEW.md."
+evidence = "README limitations + falsifiers; REVIEW.md."
+status = "verified"
+
+[[claim]]
+id = "clean-build"
+statement = "ruff-clean, mypy --strict clean, 5 pytest tests pass, sources are pure ASCII, the independent verify passes, and no private operating-environment details are present."
+evidence = "scripts/gate.sh."
+status = "verified"
